@@ -1,0 +1,21 @@
+* {
+    margin: 0;
+    padding: 0;
+}
+body, html {
+    height: 100%;
+    display: flex; /* Helps manage layout and prevent scrollbar issues */
+    flex-direction: column;
+}
+.toolbar {
+    padding: 10px;
+    background-color: #f0f0f0;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+#drawing-board {
+    /* The size will be set dynamically in JS to cover remaining space */
+    cursor: crosshair;
+    border: 1px solid black; /* Add a border for visibility */
+}
