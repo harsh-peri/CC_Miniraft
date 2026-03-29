@@ -1,49 +1,52 @@
-const express = require('express');
-const fs = require('fs');
-const cors = require('cors');
-const path = require('path');
+const WebSocket = require("ws");
+const axios = require("axios");
 
-const app = express();
-const PORT = 5000;
+const wss = new WebSocket.Server({ port: 5000 });
 
-const FILE = path.join(__dirname, '../../logs/logs.json');
+const REPLICAS = [
+    "http://localhost:5001",
+    "http://localhost:5002",
+    "http://localhost:5003"
+];
 
-app.use(cors());
-app.use(express.json());
+let clients = [];
 
-if (!fs.existsSync(FILE)) {
-    fs.writeFileSync(FILE, JSON.stringify([]));
+// FIND LEADER
+async function getLeader() {
+    for (let r of REPLICAS) {
+        try {
+            const res = await axios.get(`${r}/status`);
+            if (res.data.state === "leader") {
+                return r;
+            }
+        } catch {}
+    }
+    return null;
 }
 
-app.post('/logs', (req, res) => {
-    try {
-        const newLogs = req.body;
+// WS
+wss.on("connection", (ws) => {
+    clients.push(ws);
 
-        if (!Array.isArray(newLogs)) {
-            return res.status(400).json({ error: "Logs should be an array" });
-        }
+    ws.on("message", async (msg) => {
+        const leader = await getLeader();
 
-        const existing = JSON.parse(fs.readFileSync(FILE, 'utf-8'));
-        const updated = existing.concat(newLogs);
+        if (!leader) return;
 
-        fs.writeFileSync(FILE, JSON.stringify(updated, null, 2));
+        try {
+            const res = await axios.post(`${leader}/append-entries`, {
+                entry: msg.toString()
+            });
 
-        res.json({ status: "saved", count: newLogs.length });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Failed to save logs" });
-    }
+            if (res.data.committed) {
+                clients.forEach(c => c.send(msg.toString()));
+            }
+        } catch {}
+    });
+
+    ws.on("close", () => {
+        clients = clients.filter(c => c !== ws);
+    });
 });
 
-app.get('/logs', (req, res) => {
-    try {
-        const data = JSON.parse(fs.readFileSync(FILE, 'utf-8'));
-        res.json(data);
-    } catch (err) {
-        res.status(500).json({ error: "Read error" });
-    }
-});
-
-app.listen(PORT, () => {
-    console.log(`Gateway running on http://localhost:${PORT}`);
-});
+console.log("Gateway running ws://localhost:5000");
