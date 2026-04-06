@@ -1,0 +1,59 @@
+services:
+
+  # ---------------- FRONTEND ----------------
+  frontend:
+    build: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - gateway
+    networks:
+      raft-net:
+
+  # ---------------- GATEWAY ----------------
+  gateway:
+    build: ./backend/gateway
+    ports:
+      - "5000:5000"
+    depends_on:
+      - node1
+      - node2
+      - node3
+    networks:
+      raft-net:
+
+  # ---------------- RAFT NODES ----------------
+  node1:
+    build: ./backend/node
+    container_name: node1
+    command: ["node", "nodex.js", "1"]
+    volumes:
+      - ./logs:/logs
+    networks:
+      raft-net:
+
+  node2:
+    build: ./backend/node
+    container_name: node2
+    command: ["node", "nodex.js", "2"]
+    volumes:
+      - ./logs:/logs
+    networks:
+      raft-net:
+
+  node3:
+    build: ./backend/node
+    container_name: node3
+    command: ["node", "nodex.js", "3"]
+    volumes:
+      - ./logs:/logs
+    networks:
+      raft-net:
+
+# ---------------- NETWORK ----------------
+networks:
+  raft-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

@@ -1,0 +1,54 @@
+const WebSocket = require("ws");
+const axios = require("axios");
+
+const wss = new WebSocket.Server({ port: 5000 });
+
+const NODES = [
+  "http://node1:5000",
+  "http://node2:5000",
+  "http://node3:5000"
+];
+
+let clients = [];
+
+// FIND LEADER
+async function getLeader() {
+    for (let node of NODES) {
+        try {
+            const res = await axios.get(`${node}/status`);
+            if (res.data.state === "leader") {
+                return node;
+            }
+        } catch {}
+    }
+    return null;
+}
+
+// WS
+wss.on("connection", (ws) => {
+    clients.push(ws);
+
+    ws.on("message", async (msg) => {
+        const leader = await getLeader();
+
+        if (!leader) return;
+	
+	const parsed = JSON.parse(msg.toString());
+
+        try {
+            const res = await axios.post(`${leader}/append-entries`, {
+                entry: parsed
+            });
+
+            if (res.data.committed) {
+                clients.forEach(c => c.send(JSON.stringify(parsed)));
+            }
+        } catch {}
+    });
+
+    ws.on("close", () => {
+        clients = clients.filter(c => c !== ws);
+    });
+});
+
+console.log("Gateway running ws://localhost:5000");
